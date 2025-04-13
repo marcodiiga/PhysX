@@ -6,6 +6,9 @@ if(NOT DEFINED PHYSX_ROOT_DIR)
     set(PHYSX_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE INTERNAL "Path to PhysX root directory")
 endif()
 
+# Export environment variable for child processes
+set(ENV{PHYSX_ROOT_DIR} ${PHYSX_ROOT_DIR})
+
 # Set up module paths
 set(PHYSX_CMAKE_MODULES_PATH ${PHYSX_ROOT_DIR}/source/compiler/cmake/modules CACHE INTERNAL "")
 list(APPEND CMAKE_MODULE_PATH ${PHYSX_CMAKE_MODULES_PATH})
@@ -14,7 +17,7 @@ list(APPEND CMAKE_MODULE_PATH ${PHYSX_CMAKE_MODULES_PATH})
 option(PX_BUILDSNIPPETS "Generate the snippets" OFF)
 option(PX_BUILDPVDRUNTIME "Generate the OmniPVD project" OFF)
 option(PX_CMAKE_SUPPRESS_REGENERATION "Disable zero_check projects" OFF)
-option(PX_GENERATE_GPU_PROJECTS "Generate the GPU projects, if possible." OFF)
+option(PX_GENERATE_GPU_PROJECTS "Generate the GPU projects, if possible." ON)
 option(PX_GENERATE_GPU_PROJECTS_ONLY "Generate ONLY the GPU projects, if possible." OFF)
 
 # Output compile commands
@@ -37,7 +40,10 @@ elseif(UNIX AND NOT APPLE)
     else()
         set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "")
     endif()
-else()
+endif()
+
+# Catch unsupported platforms
+if(NOT DEFINED TARGET_BUILD_PLATFORM)
     message(FATAL_ERROR "Unsupported platform")
 endif()
 
@@ -49,18 +55,17 @@ set(PX_OUTPUT_LIB_DIR "${PHYSX_ROOT_DIR}/lib" CACHE PATH "")
 set(PX_OUTPUT_BIN_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 set(PX_OUTPUT_DLL_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 
-# Enable CUDA if required
+# Always enable CUDA for the main PhysX library to support GPU acceleration
 if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
-    if(PX_GENERATE_GPU_PROJECTS OR PX_GENERATE_GPU_PROJECTS_ONLY)
-        enable_language(CUDA)
-        find_package(CUDAToolkit REQUIRED)
+    set(PX_GENERATE_GPU_PROJECTS ON CACHE BOOL "Generate the GPU projects" FORCE)
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
 
-        if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-            set(CMAKE_CUDA_ARCHITECTURES 75)
-        endif()
-
-        message(STATUS "CUDA enabled with architecture ${CMAKE_CUDA_ARCHITECTURES}")
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+        set(CMAKE_CUDA_ARCHITECTURES 75)
     endif()
+
+    message(STATUS "CUDA enabled with architecture ${CMAKE_CUDA_ARCHITECTURES}")
 endif()
 
 # Include FetchContent module for dependencies
@@ -69,54 +74,60 @@ include(FetchContent)
 # Set up dependencies using FetchContent
 message(STATUS "Setting up dependencies...")
 
-# 1. RapidJSON
-FetchContent_Declare(
-    rapidjson
-    GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
-    GIT_TAG v1.1.0
-)
-FetchContent_MakeAvailable(rapidjson)
-message(STATUS "RapidJSON available at: ${rapidjson_SOURCE_DIR}")
+# Only declare and fetch dependencies if we're the main project
+# This prevents redundant dependency fetching when included via FetchContent
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    # 1. RapidJSON
+    FetchContent_Declare(
+        rapidjson
+        GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
+        GIT_TAG v1.1.0
+    )
+    FetchContent_MakeAvailable(rapidjson)
+    message(STATUS "RapidJSON available at: ${rapidjson_SOURCE_DIR}")
+endif()
 
 # 2. Platform-specific dependencies
-if(TARGET_BUILD_PLATFORM STREQUAL "windows")
-    # Clang for metadata generation
-    FetchContent_Declare(
-        clangMetadata
-        GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
-        GIT_TAG master  # Closest available to 4.0.0
-    )
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    if(TARGET_BUILD_PLATFORM STREQUAL "windows")
+        # Clang for metadata generation
+        FetchContent_Declare(
+            clangMetadata
+            GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
+            GIT_TAG master  # Closest available to 4.0.0
+        )
 
-    # VSWhere for Windows
-    FetchContent_Declare(
-        vswhere
-        GIT_REPOSITORY https://github.com/microsoft/vswhere.git
-        GIT_TAG 2.8.4  # Close to requested 2.7.3
-    )
+        # VSWhere for Windows
+        FetchContent_Declare(
+            vswhere
+            GIT_REPOSITORY https://github.com/microsoft/vswhere.git
+            GIT_TAG 2.8.4  # Close to requested 2.7.3
+        )
 
-    # FreeGLUT for Windows
-    FetchContent_Declare(
-        freeglut
-        GIT_REPOSITORY https://github.com/freeglut/freeglut.git
-        GIT_TAG v3.4.0  # Closest to requested 3.4
-    )
+        # FreeGLUT for Windows
+        FetchContent_Declare(
+            freeglut
+            GIT_REPOSITORY https://github.com/freeglut/freeglut.git
+            GIT_TAG v3.4.0  # Closest to requested 3.4
+        )
 
-    FetchContent_MakeAvailable(clangMetadata vswhere freeglut)
-    message(STATUS "VSWhere available at: ${vswhere_SOURCE_DIR}")
-    message(STATUS "FreeGLUT available at: ${freeglut_SOURCE_DIR}")
+        FetchContent_MakeAvailable(clangMetadata vswhere freeglut)
+        message(STATUS "VSWhere available at: ${vswhere_SOURCE_DIR}")
+        message(STATUS "FreeGLUT available at: ${freeglut_SOURCE_DIR}")
 
-elseif(TARGET_BUILD_PLATFORM STREQUAL "linux")
-    # OpenGL for Linux
-    find_package(OpenGL REQUIRED)
-    message(STATUS "OpenGL found: ${OPENGL_FOUND}")
+    elseif(TARGET_BUILD_PLATFORM STREQUAL "linux")
+        # OpenGL for Linux
+        find_package(OpenGL REQUIRED)
+        message(STATUS "OpenGL found: ${OPENGL_FOUND}")
 
-    # Clang for Linux
-    FetchContent_Declare(
-        clangMetadata
-        GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
-        GIT_TAG master  # Closest available to 4.0.0
-    )
-    FetchContent_MakeAvailable(clangMetadata)
+        # Clang for Linux
+        FetchContent_Declare(
+            clangMetadata
+            GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
+            GIT_TAG master  # Closest available to 4.0.0
+        )
+        FetchContent_MakeAvailable(clangMetadata)
+    endif()
 endif()
 
 # Set public release flag
@@ -127,15 +138,16 @@ if(PX_CMAKE_SUPPRESS_REGENERATION)
     set(CMAKE_SUPPRESS_REGENERATION true)
 endif()
 
-# Add PhysX SDK Source code
+# Create interface library for client projects
+add_library(physx_lib INTERFACE)
+
+# Add PhysX SDK Source code to the build
 message(STATUS "Adding PhysX SDK source...")
 add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/sdk_source_bin)
 
-# Add GPU source if requested
-if(PX_GENERATE_GPU_PROJECTS OR PX_GENERATE_GPU_PROJECTS_ONLY)
-    message(STATUS "Adding PhysX GPU source...")
-    add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmakegpu ${CMAKE_CURRENT_BINARY_DIR}/sdk_gpu_source_bin)
-endif()
+# Always add GPU source - required for GPU acceleration and CUDA context manager
+message(STATUS "Adding PhysX GPU source...")
+add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmakegpu ${CMAKE_CURRENT_BINARY_DIR}/sdk_gpu_source_bin)
 
 # Add PVD runtime if requested
 if(PX_BUILDPVDRUNTIME)
@@ -151,15 +163,14 @@ if(PX_BUILDSNIPPETS)
     add_subdirectory(${PHYSX_ROOT_DIR}/snippets/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/sdk_snippets_bin)
 endif()
 
-# Create interface library for client projects
-add_library(physx_lib INTERFACE)
-
 # Link against required PhysX libraries
 # Check if targets exist before linking to handle various build configurations
+set(PHYSX_LIBS "")
 foreach(lib IN ITEMS PhysX PhysXCommon PhysXFoundation PhysXExtensions PhysXPvdSDK PhysXCooking PhysXCharacterKinematic PhysXVehicle)
     if(TARGET ${lib})
         message(STATUS "Linking physx_lib with ${lib}")
         target_link_libraries(physx_lib INTERFACE ${lib})
+        list(APPEND PHYSX_LIBS ${lib})
     endif()
 endforeach()
 
@@ -171,22 +182,23 @@ target_include_directories(physx_lib INTERFACE
     ${PHYSX_ROOT_DIR}/source/common/include
 )
 
-# Export targets
-install(TARGETS physx_lib EXPORT PhysXTargets)
-install(EXPORT PhysXTargets
-    FILE PhysXTargets.cmake
-    NAMESPACE PhysX::
-    DESTINATION lib/cmake/PhysX
-)
+# Export all compile definitions from PhysX targets to consuming projects
+foreach(lib IN LISTS PHYSX_LIBS)
+    get_target_property(DEFS ${lib} INTERFACE_COMPILE_DEFINITIONS)
+    if(DEFS)
+        target_compile_definitions(physx_lib INTERFACE ${DEFS})
+    endif()
 
-# Create a package configuration file
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/PhysXConfig.cmake
-"include(CMakeFindDependencyMacro)
-include(\${CMAKE_CURRENT_LIST_DIR}/PhysXTargets.cmake)
-")
+    get_target_property(OPTS ${lib} INTERFACE_COMPILE_OPTIONS)
+    if(OPTS)
+        target_compile_options(physx_lib INTERFACE ${OPTS})
+    endif()
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/PhysXConfig.cmake
-    DESTINATION lib/cmake/PhysX
-)
+    get_target_property(FEATS ${lib} INTERFACE_COMPILE_FEATURES)
+    if(FEATS)
+        target_compile_features(physx_lib INTERFACE ${FEATS})
+    endif()
+endforeach()
 
+# PhysX CMake configuration complete
 message(STATUS "PhysX CMake configuration complete")
