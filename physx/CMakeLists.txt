@@ -91,11 +91,17 @@ endif()
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     if(TARGET_BUILD_PLATFORM STREQUAL "windows")
         # Clang for metadata generation
-        FetchContent_Declare(
-            clangMetadata
-            GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
-            GIT_TAG master  # Closest available to 4.0.0
-        )
+        # FIXME(malesiani): I don't have a win machine to test this out right now but
+        # including a full fledged clang distro as binary dependency is rather bad practice:
+        # - no security updates
+        # - no support for newer C++ standards
+        # - less compatibility and portability
+        # is this truly necessary?
+        # FetchContent_Declare(
+        #     clangMetadata
+        #     GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
+        #     GIT_TAG master  # Closest available to 4.0.0
+        # )
 
         # VSWhere for Windows
         FetchContent_Declare(
