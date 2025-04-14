@@ -1877,8 +1877,10 @@ static __device__ void convexTriangleContactGen(
 	normalIndex.index = delayContactMask + (nbOutputContacts << ConvexTriNormalAndIndex::NbContactsShift) + remapCpuTriangleIdx;
 	ConvexTriNormalAndIndex_WriteWarp(cvxTriNI + convexTriPairOffset, normalIndex);
 
+#if PX_DEBUG
 	// assert for correct stack memory allocation
 	assert((size_t)&cvxTriNI[convexTriPairOffset] < (size_t)&cvxTriContacts[0]);
+#endif
 }
 
 #endif

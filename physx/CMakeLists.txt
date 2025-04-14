@@ -200,5 +200,33 @@ foreach(lib IN LISTS PHYSX_LIBS)
     endif()
 endforeach()
 
+# Handle GPU and CUDA integration
+if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
+    # Link PhysXGpu target if available
+    if(TARGET PhysXGpu)
+        message(STATUS "Linking physx_lib with PhysXGpu")
+        target_link_libraries(physx_lib INTERFACE PhysXGpu)
+    endif()
+
+    # Link against CUDA libraries
+    if(CUDAToolkit_FOUND)
+        message(STATUS "Linking physx_lib with CUDA::cudart")
+        target_link_libraries(physx_lib INTERFACE CUDA::cudart)
+
+        # Find and link CUDA driver library
+        find_library(CUDA_CUDA_LIBRARY cuda
+            HINTS ${CUDAToolkit_LIBRARY_DIR}
+            PATH_SUFFIXES lib64 lib/x64
+        )
+
+        if(CUDA_CUDA_LIBRARY)
+            message(STATUS "Found CUDA driver library: ${CUDA_CUDA_LIBRARY}")
+            target_link_libraries(physx_lib INTERFACE ${CUDA_CUDA_LIBRARY})
+        else()
+            message(WARNING "CUDA driver library not found, GPU functionality may be limited")
+        endif()
+    endif()
+endif()
+
 # PhysX CMake configuration complete
 message(STATUS "PhysX CMake configuration complete")
