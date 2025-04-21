@@ -1,10 +1,8 @@
-cmake_minimum_required(VERSION 3.16)
-project(PhysX VERSION 4.1.2 LANGUAGES C CXX)
+cmake_minimum_required(VERSION 3.6)
+project(PhysX VERSION 5.6.0 LANGUAGES C CXX)
 
-# Define PhysX root directory if not already defined
-if(NOT DEFINED PHYSX_ROOT_DIR)
-    set(PHYSX_ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE INTERNAL "Path to PhysX root directory")
-endif()
+# Define PhysX root directory to the path where this CMakeLists.txt file is located
+set(PHYSX_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "Path to PhysX root directory")
 
 # Export environment variable for child processes
 set(ENV{PHYSX_ROOT_DIR} ${PHYSX_ROOT_DIR})
@@ -55,6 +53,9 @@ set(PX_OUTPUT_LIB_DIR "${PHYSX_ROOT_DIR}/lib" CACHE PATH "")
 set(PX_OUTPUT_BIN_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 set(PX_OUTPUT_DLL_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 
+# Silence TR1 namespace deprecation warnings in GoogleTest
+add_compile_definitions(_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING)
+
 # Always enable CUDA for the main PhysX library to support GPU acceleration
 if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
     set(PX_GENERATE_GPU_PROJECTS ON CACHE BOOL "Generate the GPU projects" FORCE)
@@ -68,72 +69,69 @@ if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TAR
     message(STATUS "CUDA enabled with architecture ${CMAKE_CUDA_ARCHITECTURES}")
 endif()
 
+include(NvidiaBuildOptions)
+
 # Include FetchContent module for dependencies
 include(FetchContent)
 
 # Set up dependencies using FetchContent
 message(STATUS "Setting up dependencies...")
 
-# Only declare and fetch dependencies if we're the main project
-# This prevents redundant dependency fetching when included via FetchContent
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-    # 1. RapidJSON
-    FetchContent_Declare(
-        rapidjson
-        GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
-        GIT_TAG v1.1.0
-    )
-    FetchContent_MakeAvailable(rapidjson)
-    message(STATUS "RapidJSON available at: ${rapidjson_SOURCE_DIR}")
-endif()
+# 1. RapidJSON
+FetchContent_Declare(
+    rapidjson
+    GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
+    GIT_TAG v1.1.0
+)
+FetchContent_MakeAvailable(rapidjson)
+message(STATUS "RapidJSON available at: ${rapidjson_SOURCE_DIR}")
 
 # 2. Platform-specific dependencies
-if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-    if(TARGET_BUILD_PLATFORM STREQUAL "windows")
-        # Clang for metadata generation
-        # FIXME(malesiani): I don't have a win machine to test this out right now but
-        # including a full fledged clang distro as binary dependency is rather bad practice:
-        # - no security updates
-        # - no support for newer C++ standards
-        # - less compatibility and portability
-        # is this truly necessary?
-        # FetchContent_Declare(
-        #     clangMetadata
-        #     GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
-        #     GIT_TAG master  # Closest available to 4.0.0
-        # )
+if(TARGET_BUILD_PLATFORM STREQUAL "windows")
+    # Clang for metadata generation
+    # FIXME(malesiani): I don't have a win machine to test this out right now but
+    # including a full fledged clang distro as binary dependency is rather bad practice:
+    # - no security updates
+    # - no support for newer C++ standards
+    # - less compatibility and portability
+    # is this truly necessary?
+    # FetchContent_Declare(
+    #     clangMetadata
+    #     GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
+    #     GIT_TAG master  # Closest available to 4.0.0
+    # )
 
-        # VSWhere for Windows
-        FetchContent_Declare(
-            vswhere
-            GIT_REPOSITORY https://github.com/microsoft/vswhere.git
-            GIT_TAG 2.8.4  # Close to requested 2.7.3
-        )
+    # VSWhere for Windows
+    FetchContent_Declare(
+        vswhere
+        GIT_REPOSITORY https://github.com/microsoft/vswhere.git
+        GIT_TAG 2.8.4  # Close to requested 2.7.3
+    )
 
-        # FreeGLUT for Windows
-        FetchContent_Declare(
-            freeglut
-            GIT_REPOSITORY https://github.com/freeglut/freeglut.git
-            GIT_TAG v3.4.0  # Closest to requested 3.4
-        )
+    # FreeGLUT for Windows
+    FetchContent_Declare(
+        freeglut
+        GIT_REPOSITORY https://github.com/freeglut/freeglut.git
+        GIT_TAG v3.4.0  # Closest to requested 3.4
+    )
 
-        FetchContent_MakeAvailable(clangMetadata vswhere freeglut)
-        message(STATUS "VSWhere available at: ${vswhere_SOURCE_DIR}")
-        message(STATUS "FreeGLUT available at: ${freeglut_SOURCE_DIR}")
+    # FetchContent_MakeAvailable(clangMetadata vswhere freeglut)
+    FetchContent_MakeAvailable(vswhere freeglut)
+    message(STATUS "VSWhere available at: ${vswhere_SOURCE_DIR}")
+    message(STATUS "FreeGLUT available at: ${freeglut_SOURCE_DIR}")
 
-    elseif(TARGET_BUILD_PLATFORM STREQUAL "linux")
-        # OpenGL for Linux
-        find_package(OpenGL REQUIRED)
-        message(STATUS "OpenGL found: ${OPENGL_FOUND}")
+elseif(TARGET_BUILD_PLATFORM STREQUAL "linux")
+    # OpenGL for Linux
+    find_package(OpenGL REQUIRED)
+    message(STATUS "OpenGL found: ${OPENGL_FOUND}")
 
-        # Clang for Linux
-        FetchContent_Declare(
-            clangMetadata
-            GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
-            GIT_TAG master  # Closest available to 4.0.0
-        )
-        FetchContent_MakeAvailable(clangMetadata)
-    endif()
+    # Clang for Linux
+    FetchContent_Declare(
+        clangMetadata
+        GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
+        GIT_TAG master  # Closest available to 4.0.0
+    )
+    FetchContent_MakeAvailable(clangMetadata)
 endif()
 
 # Set public release flag
