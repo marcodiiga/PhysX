@@ -1,80 +1,158 @@
 cmake_minimum_required(VERSION 3.11)
-project(PhysX VERSION 5.6.0 LANGUAGES C CXX)
+project(PhysX VERSION 5.6.0 LANGUAGES C CXX CUDA)
 
-# Define PhysX root directory to the path where this CMakeLists.txt file is located
+# Set PHYSX_ROOT_DIR to the location of this file
 set(PHYSX_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "Path to PhysX root directory")
-
-# Export environment variable for child processes
-set(ENV{PHYSX_ROOT_DIR} ${PHYSX_ROOT_DIR})
-
-# Set up module paths
-set(PHYSX_CMAKE_MODULES_PATH ${PHYSX_ROOT_DIR}/source/compiler/cmake/modules CACHE INTERNAL "")
+set(PHYSX_CMAKE_MODULES_PATH "${PHYSX_ROOT_DIR}/source/compiler/cmake/modules" CACHE INTERNAL "")
 list(APPEND CMAKE_MODULE_PATH ${PHYSX_CMAKE_MODULES_PATH})
 
-# PhysX build options
+# Mimic Python preset parameters via options and environment variables
+option(PX_GENERATE_GPU_PROJECTS "Generate GPU projects" ON)
+option(PX_GENERATE_GPU_PROJECTS_ONLY "Generate ONLY GPU projects" OFF)
 option(PX_BUILDSNIPPETS "Generate the snippets" OFF)
 option(PX_BUILDPVDRUNTIME "Generate the OmniPVD project" OFF)
 option(PX_CMAKE_SUPPRESS_REGENERATION "Disable zero_check projects" OFF)
-option(PX_GENERATE_GPU_PROJECTS "Generate the GPU projects, if possible." ON)
-option(PX_GENERATE_GPU_PROJECTS_ONLY "Generate ONLY the GPU projects, if possible." OFF)
-
-# Output compile commands
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# Enable folder properties
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-# Platform detection and configuration
-if(WIN32)
-    set(TARGET_BUILD_PLATFORM "windows" CACHE INTERNAL "")
-    set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "")
-elseif(APPLE)
-    set(TARGET_BUILD_PLATFORM "mac" CACHE INTERNAL "")
-    set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "")
-elseif(UNIX AND NOT APPLE)
-    set(TARGET_BUILD_PLATFORM "linux" CACHE INTERNAL "")
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-        set(PX_OUTPUT_ARCH "arm" CACHE INTERNAL "")
-    else()
-        set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "")
-    endif()
+# Allow overriding some parameters from the command line for preset-like behavior.
+if(NOT DEFINED TARGET_BUILD_PLATFORM)
+  if(WIN32)
+    set(TARGET_BUILD_PLATFORM "windows" CACHE INTERNAL "Target build platform")
+  elseif(APPLE)
+    set(TARGET_BUILD_PLATFORM "mac" CACHE INTERNAL "Target build platform")
+  elseif(UNIX)
+    set(TARGET_BUILD_PLATFORM "linux" CACHE INTERNAL "Target build platform")
+  endif()
 endif()
 
-# Catch unsupported platforms
-if(NOT DEFINED TARGET_BUILD_PLATFORM)
-    message(FATAL_ERROR "Unsupported platform")
+if(NOT DEFINED PX_OUTPUT_ARCH)
+  if(TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "mac")
+    set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "Output architecture")
+  elseif(TARGET_BUILD_PLATFORM STREQUAL "linux")
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+      set(PX_OUTPUT_ARCH "arm" CACHE INTERNAL "Output architecture")
+    else()
+      set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "Output architecture")
+    endif()
+  endif()
+endif()
+
+# Allow defining the compiler and generator from the command-line (mimicking preset xml)
+if(NOT DEFINED COMPILER)
+  set(COMPILER "" CACHE STRING "Preset compiler")
+endif()
+if(NOT DEFINED GENERATOR)
+  set(GENERATOR "" CACHE STRING "Preset generator")
 endif()
 
 message(STATUS "Target platform: ${TARGET_BUILD_PLATFORM}")
-message(STATUS "Target architecture: ${PX_OUTPUT_ARCH}")
+message(STATUS "Output architecture: ${PX_OUTPUT_ARCH}")
+message(STATUS "Compiler: ${COMPILER}")
+message(STATUS "Generator: ${GENERATOR}")
+
+#
+# Toolchain and compiler configuration (exactly as in the Python script's getPlatformCMakeParams)
+#
+if(TARGET_BUILD_PLATFORM STREQUAL "win64")
+  if(COMPILER STREQUAL "x86_64-w64-mingw32-g++")
+    set(CMAKE_TOOLCHAIN_FILE "${PHYSX_CMAKE_MODULES_PATH}/linux/WindowsCrossToolchain.linux-unknown-x86_64.cmake"
+         CACHE FILEPATH "Toolchain file")
+  endif()
+elseif(TARGET_BUILD_PLATFORM STREQUAL "linux")
+  if(COMPILER STREQUAL "clang-crosscompile")
+    set(CMAKE_TOOLCHAIN_FILE "${PHYSX_CMAKE_MODULES_PATH}/linux/LinuxCrossToolchain.x86_64-unknown-linux-gnu.cmake"
+         CACHE FILEPATH "Toolchain file")
+    if(DEFINED ENV{PM_MinGW_PATH})
+      set(CMAKE_MAKE_PROGRAM "$ENV{PM_MinGW_PATH}/bin/mingw32-make.exe")
+    endif()
+  elseif(COMPILER STREQUAL "clang")
+    if(DEFINED ENV{PM_clang_PATH})
+      set(CMAKE_C_COMPILER "$ENV{PM_clang_PATH}/bin/clang")
+      set(CMAKE_CXX_COMPILER "$ENV{PM_clang_PATH}/bin/clang++")
+    endif()
+  endif()
+elseif(TARGET_BUILD_PLATFORM STREQUAL "linuxAarch64")
+  if(COMPILER STREQUAL "clang-crosscompile")
+    set(CMAKE_TOOLCHAIN_FILE "${PHYSX_CMAKE_MODULES_PATH}/linux/LinuxCrossToolchain.aarch64-unknown-linux-gnueabihf.cmake"
+         CACHE FILEPATH "Toolchain file")
+    if(DEFINED ENV{PM_MinGW_PATH})
+      set(CMAKE_MAKE_PROGRAM "$ENV{PM_MinGW_PATH}/bin/mingw32-make.exe")
+    endif()
+  elseif(COMPILER STREQUAL "gcc")
+    # Optionally adjust settings for Packman's compiler here.
+    # ...additional configuration if needed...
+  elseif(COMPILER STREQUAL "clang")
+    if(DEFINED ENV{PM_clang_PATH})
+      set(CMAKE_C_COMPILER "$ENV{PM_clang_PATH}/bin/clang")
+      set(CMAKE_CXX_COMPILER "$ENV{PM_clang_PATH}/bin/clang++")
+    endif()
+  endif()
+endif()
+
+#
+# Common parameters (like the Python getCommonParams)
+#
+set(CMAKE_PREFIX_PATH "$ENV{PM_PATHS}" CACHE STRING "CMake prefix path")
+add_definitions(-DPHYSX_ROOT_DIR="${PHYSX_ROOT_DIR}")
+add_definitions(-DPX_OUTPUT_LIB_DIR="${PHYSX_ROOT_DIR}")
+add_definitions(-DPX_OUTPUT_BIN_DIR="${PHYSX_ROOT_DIR}")
+
+if(DEFINED ENV{GENERATE_SOURCE_DISTRO} AND "$ENV{GENERATE_SOURCE_DISTRO}" STREQUAL "1")
+  add_definitions(-DPX_GENERATE_SOURCE_DISTRO=1)
+endif()
+
+#
+# CUDA Integration (mimicking GPU-related switches from Python)
+#
+if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
+  set(PX_GENERATE_GPU_PROJECTS ON CACHE BOOL "Force GPU projects" FORCE)
+  enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 75 CACHE STRING "CUDA architectures")
+  endif()
+  message(STATUS "CUDA enabled with architecture ${CMAKE_CUDA_ARCHITECTURES}")
+  if(DEFINED ENV{PM_CUDA_PATH})
+    # Use the toolchain adjustments noted in the Python script
+    set(CUDAToolkit_ROOT_DIR "$ENV{PM_CUDA_PATH}")
+    message(STATUS "Using CUDA Toolkit at: $ENV{PM_CUDA_PATH}")
+    if((COMPILER STREQUAL "vc15" OR COMPILER STREQUAL "vc16" OR COMPILER STREQUAL "vc17") AND NOT GENERATOR STREQUAL "ninja")
+      # Additional CUDA flags could be passed here if required.
+    elseif(COMPILER STREQUAL "clang" AND DEFINED ENV{PM_clang_PATH})
+      set(CMAKE_CUDA_HOST_COMPILER "$ENV{PM_clang_PATH}/bin/clang++")
+    endif()
+  endif()
+endif()
+
+#
+# Platform auto-detection fallback (if not preset)
+#
+if(WIN32)
+  set(TARGET_BUILD_PLATFORM "windows" CACHE INTERNAL "Platform")
+  set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "Architecture")
+elseif(APPLE)
+  set(TARGET_BUILD_PLATFORM "mac" CACHE INTERNAL "Platform")
+  set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "Architecture")
+elseif(UNIX AND NOT APPLE)
+  set(TARGET_BUILD_PLATFORM "linux" CACHE INTERNAL "Platform")
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    set(PX_OUTPUT_ARCH "arm" CACHE INTERNAL "Architecture")
+  else()
+    set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "Architecture")
+  endif()
+endif()
+message(STATUS "Final configuration - Platform: ${TARGET_BUILD_PLATFORM}, Arch: ${PX_OUTPUT_ARCH}")
 
 # Set output directories
 set(PX_OUTPUT_LIB_DIR "${PHYSX_ROOT_DIR}/lib" CACHE PATH "")
 set(PX_OUTPUT_BIN_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 set(PX_OUTPUT_DLL_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 
-# Silence TR1 namespace deprecation warnings in GoogleTest
-add_compile_definitions(_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING)
-
-include(NvidiaBuildOptions)
-
-# Always enable CUDA for the main PhysX library to support GPU acceleration
-if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
-    set(PX_GENERATE_GPU_PROJECTS ON CACHE BOOL "Generate the GPU projects" FORCE)
-    enable_language(CUDA)
-    find_package(CUDAToolkit REQUIRED)
-
-    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES 75)
-    endif()
-
-    message(STATUS "CUDA enabled with architecture ${CMAKE_CUDA_ARCHITECTURES}")
-endif()
-
-# Include FetchContent module for dependencies
+#
+# Dependencies and FetchContent integration (as before)
+#
 include(FetchContent)
-
-# Set up dependencies using FetchContent
 message(STATUS "Setting up dependencies...")
 
 # 1. RapidJSON
@@ -83,7 +161,6 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
     GIT_TAG v1.1.0
 )
-# Set RapidJSON build options to disable tests, docs, and examples
 set(RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "Build rapidjson tests" FORCE)
 set(RAPIDJSON_BUILD_DOC OFF CACHE BOOL "Build rapidjson documentation" FORCE)
 set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "Build rapidjson examples" FORCE)
@@ -92,171 +169,114 @@ message(STATUS "RapidJSON available at: ${rapidjson_SOURCE_DIR}")
 
 # 2. Platform-specific dependencies
 if(TARGET_BUILD_PLATFORM STREQUAL "windows")
-    # Clang for metadata generation
-    # FIXME(malesiani): I don't have a win machine to test this out right now but
-    # including a full fledged clang distro as binary dependency is rather bad practice:
-    # - no security updates
-    # - no support for newer C++ standards
-    # - less compatibility and portability
-    # is this truly necessary?
-    # FetchContent_Declare(
-    #     clangMetadata
-    #     GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
-    #     GIT_TAG master  # Closest available to 4.0.0
-    # )
-
-    # In PhysX's CMakeLists.txt, replace Clang dependency with:
-    add_custom_command(
-        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h
-        COMMAND echo "// Minimal metadata" > ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h
-        COMMENT "Generating dummy metadata"
-    )
-    
-    add_custom_target(physx_metadata DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h)    
-  
-
-    # VSWhere for Windows
-    FetchContent_Declare(
-        vswhere
-        GIT_REPOSITORY https://github.com/microsoft/vswhere.git
-        GIT_TAG 2.8.4  # Close to requested 2.7.3
-    )
-
-    # FreeGLUT for Windows
-    FetchContent_Declare(
-        freeglut
-        GIT_REPOSITORY https://github.com/freeglut/freeglut.git
-        GIT_TAG v3.4.0  # Closest to requested 3.4
-    )
-    
-    # Configure FreeGLUT build options to avoid examples that cause linking errors
-    set(FREEGLUT_BUILD_DEMOS OFF CACHE BOOL "Build FreeGLUT demos" FORCE)
-    set(FREEGLUT_BUILD_SHARED_LIBS ON CACHE BOOL "Build FreeGLUT shared library" FORCE)
-    set(FREEGLUT_BUILD_STATIC_LIBS OFF CACHE BOOL "Build FreeGLUT static library" FORCE)
-    # Ensure shared libraries are placed in a predictable location
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/Debug" CACHE PATH "" FORCE)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/Release" CACHE PATH "" FORCE)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin/RelWithDebInfo" CACHE PATH "" FORCE)
-    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}/bin/MinSizeRel" CACHE PATH "" FORCE)
-
-    # FetchContent_MakeAvailable(clangMetadata vswhere freeglut)
-    FetchContent_MakeAvailable(vswhere freeglut)
-    message(STATUS "VSWhere available at: ${vswhere_SOURCE_DIR}")
-    message(STATUS "FreeGLUT available at: ${freeglut_SOURCE_DIR}")
-
+  add_custom_command(
+      OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h
+      COMMAND echo "// Minimal metadata" > ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h
+      COMMENT "Generating dummy metadata"
+  )
+  add_custom_target(physx_metadata DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h)
+  FetchContent_Declare(
+      vswhere
+      GIT_REPOSITORY https://github.com/microsoft/vswhere.git
+      GIT_TAG 2.8.4
+  )
+  FetchContent_Declare(
+      freeglut
+      GIT_REPOSITORY https://github.com/freeglut/freeglut.git
+      GIT_TAG v3.4.0
+  )
+  set(FREEGLUT_BUILD_DEMOS OFF CACHE BOOL "Build FreeGLUT demos" FORCE)
+  set(FREEGLUT_BUILD_SHARED_LIBS ON CACHE BOOL "Build FreeGLUT shared library" FORCE)
+  set(FREEGLUT_BUILD_STATIC_LIBS OFF CACHE BOOL "Build FreeGLUT static library" FORCE)
+  FetchContent_MakeAvailable(vswhere freeglut)
+  message(STATUS "VSWhere and FreeGLUT available")
 elseif(TARGET_BUILD_PLATFORM STREQUAL "linux")
-    # OpenGL for Linux
-    find_package(OpenGL REQUIRED)
-    message(STATUS "OpenGL found: ${OPENGL_FOUND}")
-
-    # Clang for Linux
-    FetchContent_Declare(
-        clangMetadata
-        GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
-        GIT_TAG master  # Closest available to 4.0.0
-    )
-    FetchContent_MakeAvailable(clangMetadata)
+  find_package(OpenGL REQUIRED)
+  message(STATUS "OpenGL found: ${OPENGL_FOUND}")
+  FetchContent_Declare(
+      clangMetadata
+      GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
+      GIT_TAG master
+  )
+  FetchContent_MakeAvailable(clangMetadata)
 endif()
 
-# Set public release flag
 set(PUBLIC_RELEASE 1 CACHE INTERNAL "")
-
-# Disable zero_check projects if requested
 if(PX_CMAKE_SUPPRESS_REGENERATION)
-    set(CMAKE_SUPPRESS_REGENERATION true)
+  set(CMAKE_SUPPRESS_REGENERATION true)
 endif()
 
-# Create interface library for client projects
+# Create interface library for clients
 add_library(physx_lib INTERFACE)
-
 add_dependencies(physx_lib physx_metadata)
 
-# Add PhysX SDK Source code to the build
+# Add PhysX source directories
 message(STATUS "Adding PhysX SDK source...")
 add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/sdk_source_bin)
-
-# Always add GPU source - required for GPU acceleration and CUDA context manager
 message(STATUS "Adding PhysX GPU source...")
 add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmakegpu ${CMAKE_CURRENT_BINARY_DIR}/sdk_gpu_source_bin)
-
-# Add PVD runtime if requested
 if(PX_BUILDPVDRUNTIME)
-    if(TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux")
-        message(STATUS "Adding PVD Runtime...")
-        add_subdirectory(${PHYSX_ROOT_DIR}/pvdruntime/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/pvdruntime_bin)
-    endif()
+  if(TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux")
+    message(STATUS "Adding PVD Runtime...")
+    add_subdirectory(${PHYSX_ROOT_DIR}/pvdruntime/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/pvdruntime_bin)
+  endif()
 endif()
-
-# Add snippets if requested
 if(PX_BUILDSNIPPETS)
-    message(STATUS "Adding Snippets...")
-    add_subdirectory(${PHYSX_ROOT_DIR}/snippets/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/sdk_snippets_bin)
+  message(STATUS "Adding Snippets...")
+  add_subdirectory(${PHYSX_ROOT_DIR}/snippets/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/sdk_snippets_bin)
 endif()
 
-# Link against required PhysX libraries
-# Check if targets exist before linking to handle various build configurations
+# Link against PhysX libraries if available
 set(PHYSX_LIBS "")
 foreach(lib IN ITEMS PhysX PhysXCommon PhysXFoundation PhysXExtensions PhysXPvdSDK PhysXCooking PhysXCharacterKinematic PhysXVehicle)
-    if(TARGET ${lib})
-        message(STATUS "Linking physx_lib with ${lib}")
-        target_link_libraries(physx_lib INTERFACE ${lib})
-        list(APPEND PHYSX_LIBS ${lib})
-    endif()
+  if(TARGET ${lib})
+    message(STATUS "Linking physx_lib with ${lib}")
+    target_link_libraries(physx_lib INTERFACE ${lib})
+    list(APPEND PHYSX_LIBS ${lib})
+  endif()
 endforeach()
 
-# Include necessary directories
 target_include_directories(physx_lib INTERFACE
-    ${PHYSX_ROOT_DIR}/include
-    ${PHYSX_ROOT_DIR}/source/foundation/include
-    ${PHYSX_ROOT_DIR}/source/physx/include
-    ${PHYSX_ROOT_DIR}/source/common/include
+  ${PHYSX_ROOT_DIR}/include
+  ${PHYSX_ROOT_DIR}/source/foundation/include
+  ${PHYSX_ROOT_DIR}/source/physx/include
+  ${PHYSX_ROOT_DIR}/source/common/include
 )
 
-# Export all compile definitions from PhysX targets to consuming projects
 foreach(lib IN LISTS PHYSX_LIBS)
-    get_target_property(DEFS ${lib} INTERFACE_COMPILE_DEFINITIONS)
-    if(DEFS)
-        target_compile_definitions(physx_lib INTERFACE ${DEFS})
-    endif()
-
-    get_target_property(OPTS ${lib} INTERFACE_COMPILE_OPTIONS)
-    if(OPTS)
-        target_compile_options(physx_lib INTERFACE ${OPTS})
-    endif()
-
-    get_target_property(FEATS ${lib} INTERFACE_COMPILE_FEATURES)
-    if(FEATS)
-        target_compile_features(physx_lib INTERFACE ${FEATS})
-    endif()
+  get_target_property(DEFS ${lib} INTERFACE_COMPILE_DEFINITIONS)
+  if(DEFS)
+    target_compile_definitions(physx_lib INTERFACE ${DEFS})
+  endif()
+  get_target_property(OPTS ${lib} INTERFACE_COMPILE_OPTIONS)
+  if(OPTS)
+    target_compile_options(physx_lib INTERFACE ${OPTS})
+  endif()
+  get_target_property(FEATS ${lib} INTERFACE_COMPILE_FEATURES)
+  if(FEATS)
+    target_compile_features(physx_lib INTERFACE ${FEATS})
+  endif()
 endforeach()
 
-# Handle GPU and CUDA integration
+#
+# GPU and CUDA integration
+#
 if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
-    # Link PhysXGpu target if available
-    if(TARGET PhysXGpu)
-        message(STATUS "Linking physx_lib with PhysXGpu")
-        target_link_libraries(physx_lib INTERFACE PhysXGpu)
+  if(TARGET PhysXGpu)
+    message(STATUS "Linking physx_lib with PhysXGpu")
+    target_link_libraries(physx_lib INTERFACE PhysXGpu)
+  endif()
+  if(CUDAToolkit_FOUND)
+    message(STATUS "Linking physx_lib with CUDA::cudart")
+    target_link_libraries(physx_lib INTERFACE CUDA::cudart)
+    find_library(CUDA_CUDA_LIBRARY cuda HINTS ${CUDAToolkit_LIBRARY_DIR} PATH_SUFFIXES lib64 lib/x64)
+    if(CUDA_CUDA_LIBRARY)
+      message(STATUS "Found CUDA driver library: ${CUDA_CUDA_LIBRARY}")
+      target_link_libraries(physx_lib INTERFACE ${CUDA_CUDA_LIBRARY})
+    else()
+      message(WARNING "CUDA driver library not found, GPU functionality may be limited")
     endif()
-
-    # Link against CUDA libraries
-    if(CUDAToolkit_FOUND)
-        message(STATUS "Linking physx_lib with CUDA::cudart")
-        target_link_libraries(physx_lib INTERFACE CUDA::cudart)
-
-        # Find and link CUDA driver library
-        find_library(CUDA_CUDA_LIBRARY cuda
-            HINTS ${CUDAToolkit_LIBRARY_DIR}
-            PATH_SUFFIXES lib64 lib/x64
-        )
-
-        if(CUDA_CUDA_LIBRARY)
-            message(STATUS "Found CUDA driver library: ${CUDA_CUDA_LIBRARY}")
-            target_link_libraries(physx_lib INTERFACE ${CUDA_CUDA_LIBRARY})
-        else()
-            message(WARNING "CUDA driver library not found, GPU functionality may be limited")
-        endif()
-    endif()
+  endif()
 endif()
 
-# PhysX CMake configuration complete
 message(STATUS "PhysX CMake configuration complete")
