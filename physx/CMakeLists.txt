@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.11)
 project(PhysX VERSION 5.6.0 LANGUAGES C CXX)
 
 # Define PhysX root directory to the path where this CMakeLists.txt file is located
@@ -56,6 +56,8 @@ set(PX_OUTPUT_DLL_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 # Silence TR1 namespace deprecation warnings in GoogleTest
 add_compile_definitions(_SILENCE_TR1_NAMESPACE_DEPRECATION_WARNING)
 
+include(NvidiaBuildOptions)
+
 # Always enable CUDA for the main PhysX library to support GPU acceleration
 if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
     set(PX_GENERATE_GPU_PROJECTS ON CACHE BOOL "Generate the GPU projects" FORCE)
@@ -69,8 +71,6 @@ if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TAR
     message(STATUS "CUDA enabled with architecture ${CMAKE_CUDA_ARCHITECTURES}")
 endif()
 
-include(NvidiaBuildOptions)
-
 # Include FetchContent module for dependencies
 include(FetchContent)
 
@@ -83,6 +83,10 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
     GIT_TAG v1.1.0
 )
+# Set RapidJSON build options to disable tests, docs, and examples
+set(RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "Build rapidjson tests" FORCE)
+set(RAPIDJSON_BUILD_DOC OFF CACHE BOOL "Build rapidjson documentation" FORCE)
+set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "Build rapidjson examples" FORCE)
 FetchContent_MakeAvailable(rapidjson)
 message(STATUS "RapidJSON available at: ${rapidjson_SOURCE_DIR}")
 
@@ -101,6 +105,16 @@ if(TARGET_BUILD_PLATFORM STREQUAL "windows")
     #     GIT_TAG master  # Closest available to 4.0.0
     # )
 
+    # In PhysX's CMakeLists.txt, replace Clang dependency with:
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h
+        COMMAND echo "// Minimal metadata" > ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h
+        COMMENT "Generating dummy metadata"
+    )
+    
+    add_custom_target(physx_metadata DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h)    
+  
+
     # VSWhere for Windows
     FetchContent_Declare(
         vswhere
@@ -114,6 +128,16 @@ if(TARGET_BUILD_PLATFORM STREQUAL "windows")
         GIT_REPOSITORY https://github.com/freeglut/freeglut.git
         GIT_TAG v3.4.0  # Closest to requested 3.4
     )
+    
+    # Configure FreeGLUT build options to avoid examples that cause linking errors
+    set(FREEGLUT_BUILD_DEMOS OFF CACHE BOOL "Build FreeGLUT demos" FORCE)
+    set(FREEGLUT_BUILD_SHARED_LIBS ON CACHE BOOL "Build FreeGLUT shared library" FORCE)
+    set(FREEGLUT_BUILD_STATIC_LIBS OFF CACHE BOOL "Build FreeGLUT static library" FORCE)
+    # Ensure shared libraries are placed in a predictable location
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/bin/Debug" CACHE PATH "" FORCE)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/bin/Release" CACHE PATH "" FORCE)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}/bin/RelWithDebInfo" CACHE PATH "" FORCE)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}/bin/MinSizeRel" CACHE PATH "" FORCE)
 
     # FetchContent_MakeAvailable(clangMetadata vswhere freeglut)
     FetchContent_MakeAvailable(vswhere freeglut)
@@ -144,6 +168,8 @@ endif()
 
 # Create interface library for client projects
 add_library(physx_lib INTERFACE)
+
+add_dependencies(physx_lib physx_metadata)
 
 # Add PhysX SDK Source code to the build
 message(STATUS "Adding PhysX SDK source...")
