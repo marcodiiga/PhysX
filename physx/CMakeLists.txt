@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.16)
 project(PhysX VERSION 5.6.0 LANGUAGES C CXX CUDA)
 
 # Set PHYSX_ROOT_DIR to the location of this file
