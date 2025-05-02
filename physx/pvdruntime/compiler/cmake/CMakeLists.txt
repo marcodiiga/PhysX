@@ -44,9 +44,9 @@ INCLUDE(NvidiaBuildOptions)
 IF(CMAKE_CONFIGURATION_TYPES)
 	SET(CMAKE_CONFIGURATION_TYPES debug checked profile release)
 	SET(CMAKE_CONFIGURATION_TYPES "${CMAKE_CONFIGURATION_TYPES}" CACHE STRING
-		"Reset config to what we need" 
+		"Reset config to what we need"
 		FORCE)
-	
+
 	# Need to define these at least once.
 	SET(CMAKE_EXE_LINKER_FLAGS_CHECKED "")
 	SET(CMAKE_EXE_LINKER_FLAGS_PROFILE "")
@@ -56,7 +56,7 @@ IF(CMAKE_CONFIGURATION_TYPES)
 	# Build PDBs for all configurations
 	SET(CMAKE_EXE_LINKER_FLAGS "/DEBUG")
 	SET(CMAKE_SHARED_LINKER_FLAGS "/DEBUG")
-	
+
 ENDIF()
 
 SET(PROJECT_CMAKE_FILES_DIR compiler/cmake)
@@ -72,9 +72,10 @@ INCLUDE(${PHYSX_ROOT_DIR}/pvdruntime/${PROJECT_CMAKE_FILES_DIR}/${TARGET_BUILD_P
 # Set folder Server to all Server projects
 SET_PROPERTY(TARGET PVDRuntime PROPERTY FOLDER "PVDRuntime")
 
-INSTALL(
-		TARGETS PVDRuntime
-		EXPORT PhysXSDK
-		DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>	
-		)
-      
+if(NOT DEFINED PX_ENABLE_INSTALL OR (DEFINED PX_ENABLE_INSTALL AND PX_ENABLE_INSTALL))
+	INSTALL(
+			TARGETS PVDRuntime
+			EXPORT PhysXSDK
+			DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>
+			)
+endif()

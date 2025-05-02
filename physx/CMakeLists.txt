@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(PhysX VERSION 5.6.0 LANGUAGES C CXX CUDA)
 
+# Installation helper functions
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
 # Set PHYSX_ROOT_DIR to the location of this file
 set(PHYSX_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL "Path to PhysX root directory")
 set(PHYSX_CMAKE_MODULES_PATH "${PHYSX_ROOT_DIR}/source/compiler/cmake/modules" CACHE INTERNAL "")
@@ -14,6 +18,24 @@ option(PX_BUILDPVDRUNTIME "Generate the OmniPVD project" OFF)
 option(PX_CMAKE_SUPPRESS_REGENERATION "Disable zero_check projects" OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+
+# Installation control
+if(PROJECT_IS_TOP_LEVEL)
+  set(PX_IS_TOP_LEVEL_PROJECT TRUE)
+  set(PX_ENABLE_INSTALL TRUE)
+else()
+  set(PX_IS_TOP_LEVEL_PROJECT FALSE)
+  set(PX_ENABLE_INSTALL FALSE)
+  set(PX_BUILDSNIPPETS FALSE)
+  set(PX_BUILDPVDRUNTIME FALSE)
+endif()
+
+# # Output directories
+# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PHYSX_ROOT_DIR}/lib)
+# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PHYSX_ROOT_DIR}/lib)
+# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PHYSX_ROOT_DIR}/bin)
+
 
 # Allow overriding some parameters from the command line for preset-like behavior.
 if(NOT DEFINED TARGET_BUILD_PLATFORM)
@@ -155,16 +177,25 @@ set(PX_OUTPUT_DLL_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 include(FetchContent)
 message(STATUS "Setting up dependencies...")
 
-# 1. RapidJSON
+# 1. RapidJSON - properly handle fetch without installation issues
 FetchContent_Declare(
     rapidjson
     GIT_REPOSITORY https://github.com/Tencent/rapidjson.git
     GIT_TAG v1.1.0
 )
-set(RAPIDJSON_BUILD_TESTS OFF CACHE BOOL "Build rapidjson tests" FORCE)
-set(RAPIDJSON_BUILD_DOC OFF CACHE BOOL "Build rapidjson documentation" FORCE)
-set(RAPIDJSON_BUILD_EXAMPLES OFF CACHE BOOL "Build rapidjson examples" FORCE)
-FetchContent_MakeAvailable(rapidjson)
+
+# Only populate source, don't do project configuration to avoid install rules
+FetchContent_GetProperties(rapidjson)
+if(NOT rapidjson_POPULATED)
+  message(STATUS "Fetching RapidJSON...")
+  FetchContent_Populate(rapidjson)
+endif()
+
+# Create our own interface target for RapidJSON
+add_library(rapidjson INTERFACE)
+target_include_directories(rapidjson INTERFACE ${rapidjson_SOURCE_DIR}/include)
+add_library(RapidJSON::rapidjson ALIAS rapidjson)
+
 message(STATUS "RapidJSON available at: ${rapidjson_SOURCE_DIR}")
 
 # 2. Platform-specific dependencies
@@ -193,12 +224,6 @@ if(TARGET_BUILD_PLATFORM STREQUAL "windows")
 elseif(TARGET_BUILD_PLATFORM STREQUAL "linux")
   find_package(OpenGL REQUIRED)
   message(STATUS "OpenGL found: ${OPENGL_FOUND}")
-  FetchContent_Declare(
-      clangMetadata
-      GIT_REPOSITORY https://github.com/AstroVPK/LLVM-4.0.0.git
-      GIT_TAG master
-  )
-  FetchContent_MakeAvailable(clangMetadata)
 endif()
 
 set(PUBLIC_RELEASE 1 CACHE INTERNAL "")
@@ -215,6 +240,18 @@ message(STATUS "Adding PhysX SDK source...")
 add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/sdk_source_bin)
 message(STATUS "Adding PhysX GPU source...")
 add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmakegpu ${CMAKE_CURRENT_BINARY_DIR}/sdk_gpu_source_bin)
+
+# 1. Record the two build‐output directories as CMake variables
+set(PHYSX_SDK_SOURCE_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/sdk_source_bin"   CACHE INTERNAL "PhysX SDK core binary dir")
+set(PHYSX_SDK_GPU_SOURCE_BIN_DIR   "${CMAKE_CURRENT_BINARY_DIR}/sdk_gpu_source_bin" CACHE INTERNAL "PhysX SDK GPU binary dir")
+
+# 2. Attach them as public (INTERFACE_) properties on the physx_lib target
+set_target_properties(physx_lib PROPERTIES
+  INTERFACE_PHYSX_SDK_SOURCE_BIN_DIR "${PHYSX_SDK_SOURCE_BIN_DIR}"
+  INTERFACE_PHYSX_SDK_GPU_SOURCE_BIN_DIR "${PHYSX_SDK_GPU_SOURCE_BIN_DIR}"
+)
+
+
 if(PX_BUILDPVDRUNTIME)
   if(TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux")
     message(STATUS "Adding PVD Runtime...")
@@ -280,3 +317,58 @@ if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TAR
 endif()
 
 message(STATUS "PhysX CMake configuration complete")
+
+# Only execute installation commands when appropriate
+if(PX_ENABLE_INSTALL)
+  message(STATUS "PhysX installation enabled")
+
+  # Install PhysX headers
+  install(DIRECTORY ${PHYSX_ROOT_DIR}/include/
+          DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+          FILES_MATCHING PATTERN "*.h*")
+
+  # Install PhysX library targets
+  install(TARGETS ${PHYSX_LIBS}
+      EXPORT PhysXTargets
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+      INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+  # Export the targets for find_package
+  install(EXPORT PhysXTargets
+      FILE PhysXTargets.cmake
+      NAMESPACE PhysX::
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PhysX)
+
+  # Generate the version file for the configuration
+  write_basic_package_version_file(
+      "${CMAKE_CURRENT_BINARY_DIR}/PhysXConfigVersion.cmake"
+      VERSION ${PROJECT_VERSION}
+      COMPATIBILITY AnyNewerVersion)
+
+  # Configure the config file
+  configure_package_config_file(
+      "${CMAKE_CURRENT_SOURCE_DIR}/source/compiler/cmake/PhysXConfig.cmake.in"
+      "${CMAKE_CURRENT_BINARY_DIR}/PhysXConfig.cmake"
+      INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PhysX)
+
+  # Install the config files
+  install(FILES
+      "${CMAKE_CURRENT_BINARY_DIR}/PhysXConfig.cmake"
+      "${CMAKE_CURRENT_BINARY_DIR}/PhysXConfigVersion.cmake"
+      DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/PhysX)
+else()
+  message(STATUS "PhysX installation disabled (not top-level project)")
+  message(STATUS "However, shared library targets will still be available for linking.")
+
+  # Install with proper RPATH settings so libraries can find each other
+  set_target_properties(PhysXGpu PhysX PhysXCharacterKinematic PhysXCommon PhysXCooking PhysXExtensions PhysXFoundation
+      PROPERTIES
+      INSTALL_RPATH "$ORIGIN"
+      BUILD_WITH_INSTALL_RPATH TRUE)
+
+  install(TARGETS PhysXGpu PhysX PhysXCharacterKinematic PhysXCommon PhysXCooking PhysXExtensions PhysXFoundation
+      LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()

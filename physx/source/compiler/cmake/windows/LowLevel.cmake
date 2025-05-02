@@ -66,8 +66,10 @@ ELSE()
 ENDIF()
 
 IF(PX_EXPORT_LOWLEVEL_PDB)
-	INSTALL(FILES ${PHYSX_ROOT_DIR}/$<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>/$<$<CONFIG:debug>:${LL_COMPILE_PDB_NAME_DEBUG}>$<$<CONFIG:checked>:${LL_COMPILE_PDB_NAME_CHECKED}>$<$<CONFIG:profile>:${LL_COMPILE_PDB_NAME_PROFILE}>$<$<CONFIG:release>:${LL_COMPILE_PDB_NAME_RELEASE}>.pdb
-		DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile> OPTIONAL)	
+	if(NOT DEFINED PX_ENABLE_INSTALL OR (DEFINED PX_ENABLE_INSTALL AND PX_ENABLE_INSTALL))
+		INSTALL(FILES ${PHYSX_ROOT_DIR}/$<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>/$<$<CONFIG:debug>:${LL_COMPILE_PDB_NAME_DEBUG}>$<$<CONFIG:checked>:${LL_COMPILE_PDB_NAME_CHECKED}>$<$<CONFIG:profile>:${LL_COMPILE_PDB_NAME_PROFILE}>$<$<CONFIG:release>:${LL_COMPILE_PDB_NAME_RELEASE}>.pdb
+			DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile> OPTIONAL)
+	endif()
 ENDIF()
 
 SET(LOWLEVEL_PLATFORM_LINK_FLAGS "/MAP")

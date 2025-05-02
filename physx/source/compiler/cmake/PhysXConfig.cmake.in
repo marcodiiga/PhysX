@@ -1,0 +1,11 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/PhysXTargets.cmake")
+
+# Define the main interface target
+set(PHYSX_LIBRARIES PhysX::physx_lib)
+
+# Set include directories
+set(PHYSX_INCLUDE_DIRS "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+
+check_required_components(PhysX)

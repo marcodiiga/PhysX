@@ -166,49 +166,51 @@ IF(PX_COPY_EXTERNAL_DLL OR PUBLIC_RELEASE)
 		FILE(MAKE_DIRECTORY "${PX_EXE_OUTPUT_DIRECTORY_RELEASE}")
 		FILE(MAKE_DIRECTORY "${PX_EXE_OUTPUT_DIRECTORY_PROFILE}")
 		FILE(MAKE_DIRECTORY "${PX_EXE_OUTPUT_DIRECTORY_CHECKED}")
-		
+
 		# For freeglut DLLs, add install hooks rather than copy during configuration
 		IF(TARGET freeglut OR TARGET freeglut_shared)
 			MESSAGE(STATUS "Setting up install hooks for FreeGLUT DLLs")
-			
+
 			# Get the correct target name
 			SET(FREEGLUT_TARGET "freeglut")
 			IF(NOT TARGET freeglut AND TARGET freeglut_shared)
 				SET(FREEGLUT_TARGET "freeglut_shared")
 			ENDIF()
-			
-			INSTALL(FILES 
-				"$<TARGET_FILE:${FREEGLUT_TARGET}>"
-				DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_RELEASE}"
-				CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
-			
-			INSTALL(FILES 
-				"$<TARGET_FILE:${FREEGLUT_TARGET}>"
-				DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_PROFILE}"
-				CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
-				
-			INSTALL(FILES 
-				"$<TARGET_FILE:${FREEGLUT_TARGET}>"
-				DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_CHECKED}"
-				CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
-				
-			INSTALL(FILES 
-				"$<TARGET_FILE:${FREEGLUT_TARGET}>"
-				DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_DEBUG}"
-				CONFIGURATIONS Debug)
+
+			if(NOT DEFINED PX_ENABLE_INSTALL OR (DEFINED PX_ENABLE_INSTALL AND PX_ENABLE_INSTALL))
+				INSTALL(FILES
+					"$<TARGET_FILE:${FREEGLUT_TARGET}>"
+					DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_RELEASE}"
+					CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
+
+				INSTALL(FILES
+					"$<TARGET_FILE:${FREEGLUT_TARGET}>"
+					DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_PROFILE}"
+					CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
+
+				INSTALL(FILES
+					"$<TARGET_FILE:${FREEGLUT_TARGET}>"
+					DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_CHECKED}"
+					CONFIGURATIONS Release RelWithDebInfo MinSizeRel)
+
+				INSTALL(FILES
+					"$<TARGET_FILE:${FREEGLUT_TARGET}>"
+					DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_DEBUG}"
+					CONFIGURATIONS Debug)
+			endif()
 		ELSE()
 			# Fallback to traditional path-based copy if target doesn't exist
 			MESSAGE(STATUS "Using traditional FILE(COPY) for freeglut DLLs")
-			
+
 			IF(NOT PHYSX_SLN_FREEGLUT_PATH)
 				SET(PHYSX_SLN_FREEGLUT_PATH "$ENV{PM_freeglut_PATH}/bin/" CACHE INTERNAL "PhysX freeglut copy path")
 			ENDIF()
-			
+
 			# Only execute these if the files exist to prevent errors
 			IF(EXISTS "${PHYSX_SLN_FREEGLUT_PATH}/win64/freeglutd.dll")
 				FILE(COPY "${PHYSX_SLN_FREEGLUT_PATH}/win64/freeglutd.dll" DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_DEBUG}")
 			ENDIF()
-			
+
 			IF(EXISTS "${PHYSX_SLN_FREEGLUT_PATH}/win64/freeglut.dll")
 				FILE(COPY "${PHYSX_SLN_FREEGLUT_PATH}/win64/freeglut.dll" DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_PROFILE}")
 				FILE(COPY "${PHYSX_SLN_FREEGLUT_PATH}/win64/freeglut.dll" DESTINATION "${PX_EXE_OUTPUT_DIRECTORY_RELEASE}")
@@ -281,11 +283,13 @@ ELSE()
 		SET(PHYSXDISTRO_LIBS PhysXFoundation PhysX PhysXCharacterKinematic PhysXPvdSDK PhysXCommon PhysXCooking PhysXExtensions PhysXVehicle2 PhysXTask)
 	ENDIF()
 
-	INSTALL(
-		TARGETS ${PHYSXDISTRO_LIBS}
-		EXPORT PhysXSDK
-		DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>
-		)
+	if(NOT DEFINED PX_ENABLE_INSTALL OR (DEFINED PX_ENABLE_INSTALL AND PX_ENABLE_INSTALL))
+		INSTALL(
+			TARGETS ${PHYSXDISTRO_LIBS}
+			EXPORT PhysXSDK
+			DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>
+			)
+	endif()
 
 ENDIF()
 

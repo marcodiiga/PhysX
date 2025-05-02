@@ -58,5 +58,7 @@ ELSE()
 	SET(PT_COMPILE_PDB_NAME_RELEASE "PhysXTask${CMAKE_RELEASE_POSTFIX}")
 ENDIF()
 
-INSTALL(FILES ${PHYSX_ROOT_DIR}/$<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>/$<$<CONFIG:debug>:${PT_COMPILE_PDB_NAME_DEBUG}>$<$<CONFIG:checked>:${PT_COMPILE_PDB_NAME_CHECKED}>$<$<CONFIG:profile>:${PT_COMPILE_PDB_NAME_PROFILE}>$<$<CONFIG:release>:${PT_COMPILE_PDB_NAME_RELEASE}>.pdb
-	DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile> OPTIONAL)
+if(NOT DEFINED PX_ENABLE_INSTALL OR (DEFINED PX_ENABLE_INSTALL AND PX_ENABLE_INSTALL))
+	INSTALL(FILES ${PHYSX_ROOT_DIR}/$<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile>/$<$<CONFIG:debug>:${PT_COMPILE_PDB_NAME_DEBUG}>$<$<CONFIG:checked>:${PT_COMPILE_PDB_NAME_CHECKED}>$<$<CONFIG:profile>:${PT_COMPILE_PDB_NAME_PROFILE}>$<$<CONFIG:release>:${PT_COMPILE_PDB_NAME_RELEASE}>.pdb
+		DESTINATION $<$<CONFIG:debug>:${PX_ROOT_LIB_DIR}/debug>$<$<CONFIG:release>:${PX_ROOT_LIB_DIR}/release>$<$<CONFIG:checked>:${PX_ROOT_LIB_DIR}/checked>$<$<CONFIG:profile>:${PX_ROOT_LIB_DIR}/profile> OPTIONAL)
+endif()
