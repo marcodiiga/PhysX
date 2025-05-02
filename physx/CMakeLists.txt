@@ -19,7 +19,6 @@ option(PX_CMAKE_SUPPRESS_REGENERATION "Disable zero_check projects" OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
-
 # Installation control
 if(PROJECT_IS_TOP_LEVEL)
   set(PX_IS_TOP_LEVEL_PROJECT TRUE)
@@ -30,12 +29,6 @@ else()
   set(PX_BUILDSNIPPETS FALSE)
   set(PX_BUILDPVDRUNTIME FALSE)
 endif()
-
-# # Output directories
-# set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PHYSX_ROOT_DIR}/lib)
-# set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PHYSX_ROOT_DIR}/lib)
-# set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PHYSX_ROOT_DIR}/bin)
-
 
 # Allow overriding some parameters from the command line for preset-like behavior.
 if(NOT DEFINED TARGET_BUILD_PLATFORM)
@@ -73,9 +66,7 @@ message(STATUS "Output architecture: ${PX_OUTPUT_ARCH}")
 message(STATUS "Compiler: ${COMPILER}")
 message(STATUS "Generator: ${GENERATOR}")
 
-#
 # Toolchain and compiler configuration (exactly as in the Python script's getPlatformCMakeParams)
-#
 if(TARGET_BUILD_PLATFORM STREQUAL "win64")
   if(COMPILER STREQUAL "x86_64-w64-mingw32-g++")
     set(CMAKE_TOOLCHAIN_FILE "${PHYSX_CMAKE_MODULES_PATH}/linux/WindowsCrossToolchain.linux-unknown-x86_64.cmake"
@@ -112,9 +103,7 @@ elseif(TARGET_BUILD_PLATFORM STREQUAL "linuxAarch64")
   endif()
 endif()
 
-#
 # Common parameters (like the Python getCommonParams)
-#
 set(CMAKE_PREFIX_PATH "$ENV{PM_PATHS}" CACHE STRING "CMake prefix path")
 add_definitions(-DPHYSX_ROOT_DIR="${PHYSX_ROOT_DIR}")
 add_definitions(-DPX_OUTPUT_LIB_DIR="${PHYSX_ROOT_DIR}")
@@ -124,9 +113,7 @@ if(DEFINED ENV{GENERATE_SOURCE_DISTRO} AND "$ENV{GENERATE_SOURCE_DISTRO}" STREQU
   add_definitions(-DPX_GENERATE_SOURCE_DISTRO=1)
 endif()
 
-#
 # CUDA Integration (mimicking GPU-related switches from Python)
-#
 if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
   set(PX_GENERATE_GPU_PROJECTS ON CACHE BOOL "Force GPU projects" FORCE)
   enable_language(CUDA)
@@ -147,9 +134,7 @@ if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TAR
   endif()
 endif()
 
-#
 # Platform auto-detection fallback (if not preset)
-#
 if(WIN32)
   set(TARGET_BUILD_PLATFORM "windows" CACHE INTERNAL "Platform")
   set(PX_OUTPUT_ARCH "x86" CACHE INTERNAL "Architecture")
@@ -171,9 +156,7 @@ set(PX_OUTPUT_LIB_DIR "${PHYSX_ROOT_DIR}/lib" CACHE PATH "")
 set(PX_OUTPUT_BIN_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 set(PX_OUTPUT_DLL_DIR "${PHYSX_ROOT_DIR}/bin" CACHE PATH "")
 
-#
 # Dependencies and FetchContent integration (as before)
-#
 include(FetchContent)
 message(STATUS "Setting up dependencies...")
 
@@ -241,16 +224,15 @@ add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmake ${CMAKE_CURRENT_BINARY_
 message(STATUS "Adding PhysX GPU source...")
 add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmakegpu ${CMAKE_CURRENT_BINARY_DIR}/sdk_gpu_source_bin)
 
-# 1. Record the two build‐output directories as CMake variables
+# Record the two build‐output directories as CMake variables
 set(PHYSX_SDK_SOURCE_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/sdk_source_bin"   CACHE INTERNAL "PhysX SDK core binary dir")
 set(PHYSX_SDK_GPU_SOURCE_BIN_DIR   "${CMAKE_CURRENT_BINARY_DIR}/sdk_gpu_source_bin" CACHE INTERNAL "PhysX SDK GPU binary dir")
 
-# 2. Attach them as public (INTERFACE_) properties on the physx_lib target
+# Attach them as public (INTERFACE_) properties on the physx_lib target
 set_target_properties(physx_lib PROPERTIES
   INTERFACE_PHYSX_SDK_SOURCE_BIN_DIR "${PHYSX_SDK_SOURCE_BIN_DIR}"
   INTERFACE_PHYSX_SDK_GPU_SOURCE_BIN_DIR "${PHYSX_SDK_GPU_SOURCE_BIN_DIR}"
 )
-
 
 if(PX_BUILDPVDRUNTIME)
   if(TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux")
@@ -295,9 +277,7 @@ foreach(lib IN LISTS PHYSX_LIBS)
   endif()
 endforeach()
 
-#
 # GPU and CUDA integration
-#
 if(NOT CMAKE_CROSSCOMPILING AND (TARGET_BUILD_PLATFORM STREQUAL "windows" OR TARGET_BUILD_PLATFORM STREQUAL "linux"))
   if(TARGET PhysXGpu)
     message(STATUS "Linking physx_lib with PhysXGpu")
