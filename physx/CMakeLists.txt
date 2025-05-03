@@ -370,5 +370,7 @@ else()
 
   install(TARGETS PhysXGpu PhysX PhysXCharacterKinematic PhysXCommon PhysXCooking PhysXExtensions PhysXFoundation
       LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR})
+      RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
+      ARCHIVE DESTINATION ""  # excludes static libs (.lib/.a)
+  )
 endif()
