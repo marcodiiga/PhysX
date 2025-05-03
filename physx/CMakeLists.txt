@@ -182,7 +182,7 @@ add_library(RapidJSON::rapidjson ALIAS rapidjson)
 message(STATUS "RapidJSON available at: ${rapidjson_SOURCE_DIR}")
 
 # 2. Platform-specific dependencies
-if(TARGET_BUILD_PLATFORM STREQUAL "windows")
+if(TARGET_BUILD_PLATFORM STREQUAL "windows" AND PX_ENABLE_INSTALL)
   add_custom_command(
       OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h
       COMMAND echo "// Minimal metadata" > ${CMAKE_CURRENT_BINARY_DIR}/generated_metadata.h

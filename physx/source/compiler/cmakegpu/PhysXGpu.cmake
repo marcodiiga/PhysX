@@ -89,8 +89,10 @@ TARGET_INCLUDE_DIRECTORIES(PhysXGpu
 	PRIVATE ${PHYSX_SOURCE_DIR}/physxgpu/include
 )
 
+# Note: do not add any _64 or _32 suffixes here - there are ways to add it
+# in NvidiaBuildOptions.cmake if necessary.
 SET_TARGET_PROPERTIES(PhysXGpu PROPERTIES
-	OUTPUT_NAME PhysXGpu_64
+	OUTPUT_NAME PhysXGpu
 )
 
 IF(PHYSXGPU_LIBTYPE STREQUAL "STATIC")
