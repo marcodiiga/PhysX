@@ -28,6 +28,10 @@ else()
   set(PX_ENABLE_INSTALL FALSE)
   set(PX_BUILDSNIPPETS FALSE)
   set(PX_BUILDPVDRUNTIME FALSE)
+
+  # force PhysX to output libs into the top project's build folder instead of its own source folder
+  set(PX_OUTPUT_LIB_DIR "${CMAKE_BINARY_DIR}/physx" CACHE PATH "" FORCE)
+  set(PX_OUTPUT_BIN_DIR "${CMAKE_BINARY_DIR}/physx" CACHE PATH "" FORCE)
 endif()
 
 # Allow overriding some parameters from the command line for preset-like behavior.
@@ -223,6 +227,22 @@ message(STATUS "Adding PhysX SDK source...")
 add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmake ${CMAKE_CURRENT_BINARY_DIR}/sdk_source_bin)
 message(STATUS "Adding PhysX GPU source...")
 add_subdirectory(${PHYSX_ROOT_DIR}/source/compiler/cmakegpu ${CMAKE_CURRENT_BINARY_DIR}/sdk_gpu_source_bin)
+
+if(WIN32)
+  # Prevent the duplicate "_64" on windows platforms by clearing the auto-appended postfixes
+  set_target_properties(PhysXGpu PROPERTIES
+    DEBUG_POSTFIX   ""
+    RELEASE_POSTFIX ""
+    PROFILE_POSTFIX ""
+    CHECKED_POSTFIX ""
+  )
+
+  # If you still want “_64” to appear exactly once:
+  #   Uncomment the next line to force the base name to PhysXGpu_64,
+  #   so the one remaining postfix yields PhysXGpu_64.dll
+  # set_target_properties(PhysXGpu PROPERTIES OUTPUT_NAME "PhysXGpu_64")
+endif()
+
 
 # Record the two build‐output directories as CMake variables
 set(PHYSX_SDK_SOURCE_BIN_DIR "${CMAKE_CURRENT_BINARY_DIR}/sdk_source_bin"   CACHE INTERNAL "PhysX SDK core binary dir")
