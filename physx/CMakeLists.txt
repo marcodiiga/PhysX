@@ -13,6 +13,8 @@ list(APPEND CMAKE_MODULE_PATH ${PHYSX_CMAKE_MODULES_PATH})
 # Mimic Python preset parameters via options and environment variables
 option(PX_GENERATE_GPU_PROJECTS "Generate GPU projects" ON)
 option(PX_GENERATE_GPU_PROJECTS_ONLY "Generate ONLY GPU projects" OFF)
+option(PX_GENERATE_STATIC_LIBRARIES "Build static PhysX libs" OFF)
+option(PX_GENERATE_GPU_STATIC_LIBRARIES "Build static PhysXGpu" OFF)
 option(PX_BUILDSNIPPETS "Generate the snippets" OFF)
 option(PX_BUILDPVDRUNTIME "Generate the OmniPVD project" OFF)
 option(PX_CMAKE_SUPPRESS_REGENERATION "Disable zero_check projects" OFF)
@@ -362,15 +364,33 @@ else()
   message(STATUS "PhysX installation disabled (not top-level project)")
   message(STATUS "However, shared library targets will still be available for linking.")
 
-  # Install with proper RPATH settings so libraries can find each other
-  set_target_properties(PhysXGpu PhysX PhysXCharacterKinematic PhysXCommon PhysXCooking PhysXExtensions PhysXFoundation
-      PROPERTIES
-      INSTALL_RPATH "$ORIGIN"
-      BUILD_WITH_INSTALL_RPATH TRUE)
+  # We're excluding PhysXCharacterKinematic and PhysXExtensions here since they're always static
 
-  install(TARGETS PhysXGpu PhysX PhysXCharacterKinematic PhysXCommon PhysXCooking PhysXExtensions PhysXFoundation
-      LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
-      ARCHIVE DESTINATION ""  # excludes static libs (.lib/.a)
-  )
+  # Create empty lists for shared libraries
+  set(SHARED_LIBS_TO_INSTALL "")
+
+  # Add GPU library if it's not static
+  if(NOT PX_GENERATE_GPU_STATIC_LIBRARIES)
+    list(APPEND SHARED_LIBS_TO_INSTALL PhysXGpu)
+  endif()
+
+  # Add core libraries if they're not static
+  if(NOT PX_GENERATE_STATIC_LIBRARIES)
+    list(APPEND SHARED_LIBS_TO_INSTALL PhysX PhysXCommon PhysXCooking PhysXFoundation)
+  endif()
+
+  # Only set properties and install if we have shared libraries
+  if(SHARED_LIBS_TO_INSTALL)
+    # Install with proper RPATH settings so libraries can find each other
+    set_target_properties(${SHARED_LIBS_TO_INSTALL}
+        PROPERTIES
+        INSTALL_RPATH "$ORIGIN"
+        BUILD_WITH_INSTALL_RPATH TRUE)
+
+    install(TARGETS ${SHARED_LIBS_TO_INSTALL}
+        LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
+        ARCHIVE DESTINATION ""  # excludes static libs (.lib/.a)
+    )
+  endif()
 endif()
